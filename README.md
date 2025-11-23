@@ -1,75 +1,53 @@
 # Real-Time Web Chat Application
 
-A lightweight, polling-based chat application built with C (server) and HTML/JavaScript (client). Multiple users can send and receive messages in real-time through HTTP polling.
+So basically I built this chat app using C for the server and plain HTML/JS for the client. It's pretty simple - just uses HTTP polling to let multiple people chat in real-time.
 
 ![Chat Application Screenshot](screenshot.png)
 
-## Features
+## What it does
 
-- 🔄 **Real-time messaging** using HTTP polling (1-second intervals)
-- 👥 **Multi-user support** with unique client identification
-- 🌐 **Cross-origin support** (CORS enabled)
-- 💬 **Broadcast messaging** - Messages visible to all users except the sender
-- 🎨 **Modern UI** with Tailwind CSS
-- 🔒 **Clean shutdown** with signal handlers
+The app lets multiple users send messages to each other through a browser. Every client polls the server once per second to check for new messages. It's got CORS enabled so you can test it locally, and there's some basic styling with Tailwind to make it not look terrible.
 
-## Architecture
+The server keeps messages in memory and broadcasts them to everyone except the person who sent it. Each client gets a unique ID so the server knows who's who.
 
-### Polling Model
-Unlike WebSocket-based chat applications, this uses a **polling approach**:
-- Client sends GET requests every second to check for new messages
-- Server maintains a message queue in memory
-- Each message is tagged with sender's UUID
-- Messages are broadcast to all clients except the sender
+## How it's built
 
-### Components
+Instead of using WebSockets (which would be smarter but harder to implement in C), I went with the polling approach. The client just hammers the server with GET requests every second asking "got anything new for me?" 
 
-**Server (C)**
-- HTTP server listening on port 8080
-- Handles POST requests for sending messages
-- Handles GET requests for receiving messages
-- Stores up to 100 messages in memory
-- URL decoding for special characters
+The C server listens on port 8080 and handles two types of requests - POST when someone sends a message, and GET when someone wants to receive messages. It stores up to 100 messages in a simple array in memory.
 
-**Client (HTML/JavaScript)**
-- Generates unique UUID for each browser tab
-- Polls server every second for new messages
-- Sends messages via POST requests
-- Displays messages in a chat interface
+On the client side, each browser tab generates its own UUID and uses that to identify itself. Messages get sent via POST and the polling happens in a setInterval loop.
 
-## Prerequisites
+## What you need
 
-- GCC compiler (for C server)
-- Modern web browser (Chrome, Firefox, Safari, Edge)
-- Basic understanding of HTTP and networking
+- GCC to compile the C code
+- Any modern browser
+- That's pretty much it
 
-## Installation
+## Getting it running
 
-### 1. Clone or Download the Project
+First make a directory and put the files in there:
+
 ```bash
 mkdir web-chat
 cd web-chat
 ```
 
-### 2. Save the Files
+Then compile the server:
 
-Save `server.c` and `chat.html` in the same directory.
-
-### 3. Compile the Server
 ```bash
 gcc server.c -o server
 ```
 
-If you see warnings about format truncation, they're safe to ignore.
+You might get some warnings about format truncation but don't worry about them.
 
-## Usage
+Start the server:
 
-### Starting the Server
 ```bash
 ./server
 ```
 
-Expected output:
+You should see something like:
 ```
 Socket created successfully with file descriptor: 3
 SO_REUSEADDR enabled
@@ -77,36 +55,16 @@ Bind successful
 Listening on port 8080
 ```
 
-### Opening the Chat Client
+Now just open chat.html in multiple browser tabs and start typing. Each tab is a different user.
 
-1. Open `chat.html` in your web browser
-2. Open the same file in **multiple browser tabs or windows** to simulate multiple users
-3. Start chatting!
+To stop the server just hit Ctrl+C.
 
-### Stopping the Server
+## How the messaging works
 
-Press `Ctrl+C` to gracefully shut down the server.
+When User A sends a message, it goes to the server via POST with User A's UUID attached. The server stores it. Then when User B polls the server, the server checks if the message came from User B or not. If not, it sends it to User B. Pretty straightforward.
 
-## How It Works
+Here's what a POST request looks like:
 
-### Message Flow
-```
-User A sends "Hello"
-    ↓
-[POST] → Server stores message with UUID_A
-    ↓
-User B polls (every second)
-    ↓
-[GET] → Server checks: UUID_B != UUID_A?
-    ↓
-Server sends "Hello" to User B
-    ↓
-User B displays message
-```
-
-### Request Examples
-
-**Sending a Message (POST)**
 ```http
 POST /send HTTP/1.1
 Content-Type: application/x-www-form-urlencoded
@@ -114,170 +72,108 @@ Content-Type: application/x-www-form-urlencoded
 message=Hello%20World&client_id=550e8400-e29b-41d4-a716-446655440000
 ```
 
-**Receiving Messages (GET)**
+And a GET request:
+
 ```http
 GET /receive?client_id=7c9e6679-7425-40de-944b-e07fc1f90ae7 HTTP/1.1
 ```
 
-**Server Response**
-```http
-HTTP/1.1 200 OK
-Content-Type: text/plain
-Content-Length: 12
+## Code overview
 
-Hello World
-```
+The server code has a main loop that accepts connections and figures out if it's a POST or GET request. POST requests go to sender_msg() which parses the message body, URL-decodes it, and stores it. GET requests go to reciver_msg() (yeah I know it's spelled wrong) which loops through all stored messages and returns the ones that aren't from that client.
 
-## Code Structure
+The client side is even simpler - there's a sendMessage() function that POSTs, a receiveMessages() function that polls every second, and showMessage() that adds stuff to the UI.
 
-### Server (`server.c`)
-```
-main()
-├── Socket creation & binding
-├── Accept connections loop
-│   ├── Parse HTTP request (POST/GET)
-│   ├── POST → sender_msg()
-│   └── GET → reciver_msg()
-└── Signal handlers for cleanup
+## Config stuff
 
-sender_msg()
-├── Extract message body
-├── Parse message & client_id
-├── URL decode message
-└── Store in message array
+If you want to change settings, look in server.c for:
 
-reciver_msg()
-├── Loop through all messages
-├── Filter out sender's own messages
-├── Collect matching messages
-└── Send HTTP response
-```
-
-### Client (`chat.html`)
-```
-JavaScript Components
-├── UUID generation (crypto.randomUUID)
-├── sendMessage() - POST to /send
-├── receiveMessages() - GET from /receive every 1s
-└── showMessage() - Display in UI
-```
-
-## Configuration
-
-### Server Settings
-
-Modify in `server.c`:
 ```c
-#define MAX_MESSAGES 100     // Maximum stored messages
-#define PORT 8080            // Server port
+#define MAX_MESSAGES 100     // how many messages to keep
+#define PORT 8080            // what port to use
 ```
 
-### Client Settings
+In chat.html you can change:
 
-Modify in `chat.html`:
 ```javascript
 const SEND_URL = 'http://127.0.0.1:8080/send';
 const RECV_URL = 'http://127.0.0.1:8080/receive';
 
-setInterval(receiveMessages, 1000);  // Polling interval (ms)
+setInterval(receiveMessages, 1000);  // how often to poll
 ```
 
-## Limitations
+## Known issues
 
-⚠️ **Current Limitations:**
-- Messages stored in memory only (lost on server restart)
-- No message persistence or history
-- Limited to 100 messages in queue
-- No message timestamps
-- Users see ALL previous messages when joining
-- No user authentication or nicknames
-- Polling creates constant network traffic
+There's a bunch of limitations I'm aware of:
 
-## Troubleshooting
+- Everything's in memory so restart the server and all messages are gone
+- Only keeps 100 messages then starts overwriting
+- No timestamps on anything
+- When you join you see ALL messages that happened before
+- No usernames, just UUIDs nobody can read
+- The constant polling is kinda wasteful on bandwidth
 
-### Port Already in Use
-```bash
-Error: Bind failed: Address already in use
-```
+## If stuff breaks
 
-**Solution:** Kill existing process on port 8080
+**Port already in use error**
+
+Someone's already using port 8080. Find the process and kill it:
+
 ```bash
 sudo lsof -i :8080
 kill -9 <PID>
 ```
 
-### Messages Not Appearing
+**Messages not showing up**
 
-1. Check browser console for errors (F12)
-2. Verify server is running and shows debug output
-3. Ensure you're using different browser tabs (different UUIDs)
-4. Check CORS headers in network tab
+- Open browser console (F12) and check for errors
+- Make sure the server is actually running
+- Try opening in different tabs (each needs its own UUID)
+- Check the network tab to see if requests are working
 
-### Server Crashes
+**Server crashes**
 
-- Check if message buffer is full (100 messages)
-- Look for buffer overflow in URL decoding
-- Restart server to clear message queue
+Probably hit the 100 message limit or there's a buffer overflow somewhere in the URL decoding. Just restart it.
 
-## Future Enhancements
+## Things I might add later
 
-- [ ] Message persistence (database or file)
-- [ ] User nicknames/usernames
-- [ ] Message timestamps
-- [ ] Private/direct messaging
-- [ ] Chat rooms
-- [ ] WebSocket support (eliminate polling)
-- [ ] Message delivery confirmation
-- [ ] Typing indicators
-- [ ] File/image sharing
+Would be cool to add:
+- Save messages to a file or database
+- Let people pick usernames
+- Show when messages were sent
+- Add private messaging
+- Make different chat rooms
+- Switch to WebSockets to stop the polling madness
+- Add typing indicators
+- Let people send files/images
 
-## Technical Details
+## Why polling and not WebSockets?
 
-### Why Polling Instead of WebSockets?
+Honestly just because it's easier to code in C. Don't have to deal with the WebSocket handshake and protocol. Yeah it's less efficient and there's like a 1 second delay on messages but for a learning project it's fine.
 
-This implementation uses **HTTP polling** for simplicity:
-- ✅ Easier to implement in pure C
-- ✅ No need for WebSocket protocol handling
-- ✅ Works with standard HTTP
-- ❌ Less efficient (constant requests)
-- ❌ Higher latency (~1 second delay)
+## Memory stuff
 
-### Memory Management
+I used static allocation with a fixed array to keep things simple. No malloc/free to worry about. Trade-off is it doesn't scale well but the code is easier to understand.
 
-- **Static allocation**: Fixed 100-message array
-- **No dynamic memory**: Avoids malloc/free complexity
-- **Trade-off**: Limited scalability but simpler code
+## Security
 
-### Security Considerations
-
-⚠️ **This is a learning project and NOT production-ready:**
-- No input validation or sanitization
-- No rate limiting
+This is NOT production ready at all. There's:
+- No input validation
+- No rate limiting  
 - No authentication
-- Vulnerable to XSS if messages aren't escaped
-- No HTTPS/encryption
+- XSS vulnerabilities if you don't escape HTML
+- No encryption/HTTPS
+
+Basically don't use this for anything real.
 
 ## License
 
-Free to use for educational purposes.
+Do whatever you want with it. It's for learning.
 
-## Contributing
+## Contributions
 
-Feel free to fork and improve! Some ideas:
-- Add message timestamps
-- Implement user authentication
-- Add message persistence
-- Improve error handling
-- Add unit tests
-
-## Author
-
-Built as a learning project to understand:
-- C socket programming
-- HTTP protocol fundamentals
-- Client-server architecture
-- Polling vs. push communication models
+If you want to improve it go ahead. Fork it and make it better.
 
 ---
 
-**Enjoy chatting!** 💬
+I made this to learn about socket programming in C and understand how HTTP actually works under the hood. Also wanted to see the difference between polling and real-time push models.
