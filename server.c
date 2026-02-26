@@ -141,12 +141,6 @@ void handle_get(int clientfd, char *url) {
 
     // Collect messages this client hasn't seen yet
     for (int i = start_idx; i < total_messages; i++) {
-        // Don't echo back my own messages (optional, but chat.html handles 'me' class locally)
-        // But chat.html logic appends everything received. 
-        // The standard logic is: Server sends everything, Client ignores own ID. 
-        // However, to keep it simple with the provided HTML, we will send everything 
-        // EXCEPT what the sender just sent, IF we wanted to filter.
-        // But usually, for polling, we send everything new.
         
         if (strcmp(message_store[i].sender_id, clean_id) != 0) {
              strcat(buffer, message_store[i].msg);
@@ -171,7 +165,7 @@ void handle_get(int clientfd, char *url) {
         send(clientfd, buffer, strlen(buffer), 0);
     } else {
         char response[] = 
-            "HTTP/1.1 200 OK\r\n" // 200 OK with empty body is better for JS fetch than 204 sometimes
+            "HTTP/1.1 200 OK\r\n" 
             "Access-Control-Allow-Origin: *\r\n"
             "Content-Length: 0\r\n"
             "Connection: close\r\n\r\n";
@@ -233,7 +227,7 @@ int main() {
             sscanf(buffer, "%s %s", method, url);
 
             if (strcmp(method, "POST") == 0) {
-                // Find start of body (after \r\n\r\n)
+                
                 char *body = strstr(buffer, "\r\n\r\n");
                 if (body) {
                     handle_post(clientfd, body + 4);
